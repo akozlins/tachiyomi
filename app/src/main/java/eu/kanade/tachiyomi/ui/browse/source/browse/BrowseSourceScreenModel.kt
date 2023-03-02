@@ -31,8 +31,10 @@ import eu.kanade.tachiyomi.util.removeCovers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
@@ -122,11 +124,15 @@ class BrowseSourceScreenModel(
                 getRemoteManga.subscribe(sourceId, listing.query ?: "", listing.filters)
             }.flow.map { pagingData ->
                 pagingData
-                    .map { withIOContext { networkToLocalManga.await(it.toDomainManga(sourceId)) } }
-                    .filter { !sourcePreferences.hideInLibraryItems().get() || !it.favorite }
                     .map {
-                        getManga.subscribe(it.url, it.source)
+                        flow {
+                            val localManga = withIOContext { networkToLocalManga.await(it.toDomainManga(sourceId)) }
+                            emit(localManga)
+                        }
                             .filterNotNull()
+                            .filter {
+                                !sourcePreferences.hideInLibraryItems().get() || !it.favorite
+                            }
                             .onEach(::initializeManga)
                             .stateIn(coroutineScope)
                     }
